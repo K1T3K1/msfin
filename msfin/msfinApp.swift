@@ -12,10 +12,11 @@ import SwiftData
 struct msfinApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Account.self,
+            Transaction.self,
+            Category.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
@@ -25,7 +26,7 @@ struct msfinApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AccountsView()
         }
         .modelContainer(sharedModelContainer)
     }
