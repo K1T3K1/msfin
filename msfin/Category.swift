@@ -11,6 +11,7 @@ import SwiftData
 @Model
 class Category {
     var id: UUID
+    @Attribute(.unique)
     var name: String
     var image: String
     

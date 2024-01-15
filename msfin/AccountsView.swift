@@ -62,13 +62,13 @@ struct AccountsView: View {
             Image(systemName: "cart.fill")
           }
         }
-          ToolbarItem(placement: .topBarLeading) {
-            NavigationLink(
-              destination: CategoryView()
-            ) {
-              Image(systemName: "squareshape.split.3x3")
-            }
+        ToolbarItem(placement: .topBarLeading) {
+          NavigationLink(
+            destination: CategoryView()
+          ) {
+            Image(systemName: "squareshape.split.3x3")
           }
+        }
       }
     }.foregroundStyle(colorScheme == .light ? Color.black : Color.white)
   }
@@ -82,6 +82,7 @@ struct AddAccountView: View {
   @State private var accountBalance: Double = 0.0
   @State private var accountType: String = "Debit"
   @State private var showError: Bool = false
+  @State private var errorText: String = ""
 
   let formatter: NumberFormatter = {
     let formatter = NumberFormatter()
@@ -100,17 +101,19 @@ struct AddAccountView: View {
         Text("Saving").tag("Saving")
         Text("Credit").tag("Credit")
       }.fontWeight(.heavy)
+      Divider()
       HStack {
         Text("Name: ")
           .fontWeight(.heavy)
-        TextField("", text: $accountName)
+        TextField("", text: $accountName).padding()
       }
+      Divider()
       HStack {
         HStack {
           Text("Balance: ")
             .fontWeight(.heavy)
           TextField("", value: $accountBalance, formatter: formatter)
-            .keyboardType(.decimalPad)
+            .keyboardType(.numbersAndPunctuation).padding()
         }
         Stepper(value: $accountBalance, in: 0.00...9_999_999, step: 0.01) {
         }
@@ -121,22 +124,35 @@ struct AddAccountView: View {
     }
     .toast(isPresenting: $showError) {
       AlertToast(
-        displayMode: .alert, type: .error(.red), title: "Account with the same name already exists")
+        displayMode: .alert, type: .error(.red), title: errorText)
     }
     .padding()
     .background(colorScheme == .dark ? Color.black : Color.white)
     .clipShape(RoundedRectangle(cornerRadius: 10))
-    .shadow(radius: 5)
+    .shadow(
+      color: (colorScheme == .dark ? Color.white : Color.black).opacity(0.15), radius: 5, x: 5,
+      y: 5
+    )
+    .shadow(
+      color: (colorScheme == .dark ? Color.white : Color.black).opacity(0.15), radius: 5, x: -5,
+      y: -5
+    )
     .frame(maxWidth: 350)
- }
+  }
 
   func submitAccount() {
+    if accountName == "" {
+      errorText = "Account name cannot be empty"
+      showError.toggle()
+      return
+    }
     let accType = AccountType(rawValue: accountType)
     if let aType = accType {
       do {
         let accounts = try modelContext.fetch(
           FetchDescriptor<Account>(predicate: #Predicate { $0.name == accountName }))
         if !accounts.isEmpty {
+          errorText = "Account with the same name already exists"
           showError.toggle()
           return
         }
