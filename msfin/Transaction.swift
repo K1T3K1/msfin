@@ -13,6 +13,7 @@ class Transaction {
     var id: UUID
     var timestamp: Date
     var value: Double
+    @Relationship(deleteRule: .noAction)
     var account: Account
     var name: String
     var category: Optional<Category>

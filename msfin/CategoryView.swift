@@ -70,7 +70,7 @@ struct AddCategoryView: View {
       HStack {
         Text("Name: ")
           .fontWeight(.heavy)
-        TextField("", text: $categoryName).padding()
+        TextField("", text: $categoryName).padding().textFieldStyle(.roundedBorder)
       }
       Divider()
       Button("Select a symbol") {

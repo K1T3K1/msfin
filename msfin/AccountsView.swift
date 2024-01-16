@@ -105,15 +105,18 @@ struct AddAccountView: View {
       HStack {
         Text("Name: ")
           .fontWeight(.heavy)
-        TextField("", text: $accountName).padding()
+        TextField("", text: $accountName)
+          .padding()
+          .textFieldStyle(.roundedBorder)
       }
       Divider()
-      HStack {
+      VStack {
         HStack {
           Text("Balance: ")
             .fontWeight(.heavy)
           TextField("", value: $accountBalance, formatter: formatter)
             .keyboardType(.numbersAndPunctuation).padding()
+            .textFieldStyle(.roundedBorder)
         }
         Stepper(value: $accountBalance, in: 0.00...9_999_999, step: 0.01) {
         }
@@ -181,6 +184,7 @@ struct SingleAccountView: View {
   @Bindable var account: Account
   @Query private var transactions: [Transaction]
   @State var chartValues: [ChartValue] = []
+  @State var showDeleteScreen: Bool = false
 
   init(accountRef: Account) {
     _account = Bindable(wrappedValue: accountRef)
@@ -210,6 +214,15 @@ struct SingleAccountView: View {
           }
         }
         .frame(maxHeight: 400)
+        Button(action: { withAnimation { showDeleteScreen.toggle() } }) {
+          Text("Delete account")
+            .foregroundStyle(.red)
+        }
+        .sheet(
+          isPresented: $showDeleteScreen,
+          content: {
+            DeleteAccountView(account: account)
+          })
         Divider()
         VStack(alignment: .leading) {
           Text("Latest transactions")
@@ -224,6 +237,13 @@ struct SingleAccountView: View {
                 Text("\(transaction.name)")
                 Divider()
                 Text("\(transaction.timestamp.formatted(date: .numeric, time: .shortened))")
+                HStack {
+                  Text("Category: ")
+                  if let img = transaction.category?.image {
+                    Image(systemName: img)
+                  }
+                  Text("\(transaction.category?.name ?? "None")")
+                }
               }
               .padding()
               .frame(alignment: .leading)
@@ -242,7 +262,6 @@ struct SingleAccountView: View {
     .onAppear {
       getTransactions()
     }
-
   }
 
   func getTransactions() {
@@ -269,6 +288,42 @@ struct EditAccountView: View {
   var body: some View {
     NavigationStack {
       Text("Edit account")
+    }
+  }
+}
+
+struct DeleteAccountView: View {
+  @Bindable var account: Account
+  @Environment(\.modelContext) private var modelContext
+  @Environment(\.dismiss) var dismiss
+
+  var body: some View {
+    Text("Delete account? Deleting account will delete all binded transactions")
+      .foregroundStyle(.red)
+      .fontWeight(.heavy)
+    Button(action: { withAnimation { deleteAccount() } }) {
+      Text("Delete")
+        .foregroundStyle(.red)
+    }
+  }
+
+  func deleteAccount() {
+    do {
+      let id = account.id
+      let transactions = try modelContext.fetch(
+        FetchDescriptor<Transaction>(
+          predicate: #Predicate { transaction in
+            transaction.account.id == id
+          }
+        ))
+      modelContext.delete(account)
+      for transaction in transactions {
+        modelContext.delete(transaction)
+      }
+      try modelContext.save()
+      dismiss()
+    } catch {
+
     }
   }
 }

@@ -20,9 +20,19 @@ struct TransactionListView: View {
   @Query private var transactions: [Transaction]
   @State private var sortedTransactions: [Transaction] = []
   @Query private var accounts: [Account]
+  @Query private var categories: [Category]
   @State private var isAdding: Bool = false
   @State private var selectedTab = "All"
   @State private var transactionOrder = "Date Desc."
+  @State private var summaryFilter: String = "Accounts"
+  @State private var categoryFilter: String = "No category"
+  @State private var fromDate: Date =
+    Calendar.current.date(
+      byAdding: .month,
+      value: -1,
+      to: Date()) ?? Date()
+  @State private var toDate: Date = Date()
+
   private let orders: [String] = [
     "Date Desc.",
     "Date Asc.",
@@ -40,6 +50,8 @@ struct TransactionListView: View {
           .tag("Incomes")
         getTransactionView(expression: "Expense")
           .tag("Expenses")
+        SummaryView(chartBy: $summaryFilter)
+          .tag("Summary")
       }
       .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
       .ignoresSafeArea(.all, edges: .bottom)
@@ -54,6 +66,10 @@ struct TransactionListView: View {
           .horizontal)
         Button(action: { selectedTab = "Expenses" }) {
           Image(systemName: "cart.fill.badge.minus").imageScale(.large)
+        }.frame(maxWidth: .infinity).buttonStyle(.plain).padding(.vertical, 10).padding(
+          .horizontal)
+        Button(action: { selectedTab = "Summary" }) {
+          Image(systemName: "chart.pie.fill").imageScale(.large)
         }.frame(maxWidth: .infinity).buttonStyle(.plain).padding(.vertical, 10).padding(
           .horizontal)
       }
@@ -74,13 +90,35 @@ struct TransactionListView: View {
     .ignoresSafeArea(.keyboard, edges: .bottom)
     .background(Color.black.opacity(0.05).ignoresSafeArea(.all, edges: .all))
     .toolbar {
-      ToolbarItem {
-        Picker("Order", selection: $transactionOrder) {
-          ForEach(orders, id: \.self) { order in
-            Text(order)
+      if selectedTab != "Summary" {
+        ToolbarItem {
+          Picker("Order", selection: $transactionOrder) {
+            ForEach(orders, id: \.self) { order in
+              Text(order)
+            }
+          }.onChange(of: transactionOrder) {
+            sortTransactions()
           }
-        }.onChange(of: transactionOrder) {
-          sortTransactions()
+        }
+        ToolbarItem {
+          Picker("Category filter", selection: $categoryFilter) {
+            Text("No category").tag("No category")
+            ForEach(categories) { category in
+              HStack {
+                Image(systemName: category.image)
+                Text(category.name)
+              }.tag(category.name)
+            }
+          }.onChange(of: categoryFilter) {
+            sortTransactions()
+          }
+        }
+      } else {
+        ToolbarItem {
+          Picker("Filter", selection: $summaryFilter) {
+            Text("By Accounts").tag("Accounts")
+            Text("By Categories").tag("Categories")
+          }
         }
       }
       ToolbarItem {
@@ -98,6 +136,18 @@ struct TransactionListView: View {
   func sortTransactions() {
     let comparator = getComparator(expression: $transactionOrder.wrappedValue)
     sortedTransactions = transactions.sorted(by: comparator)
+    if categoryFilter != "No category" {
+      do {
+        sortedTransactions = try sortedTransactions.filter(
+          #Predicate { $0.category?.name ?? "" == categoryFilter }
+        )
+      } catch {
+      }
+    }
+    sortedTransactions = try! sortedTransactions.filter(
+      #Predicate { fromDate < $0.timestamp && $0.timestamp < toDate }
+    )
+
   }
 
   func getComparator(expression: String) -> (Transaction, Transaction) -> Bool {
@@ -115,6 +165,8 @@ struct TransactionListView: View {
 
   func getTransactionView(expression: String) -> some View {
     return ScrollView(.vertical, showsIndicators: false) {
+      DatePicker("From", selection: $fromDate).onChange(of: fromDate) { sortTransactions() }
+      DatePicker("To", selection: $toDate).onChange(of: toDate) { sortTransactions() }
       ForEach(sortedTransactions) { transaction in
         if getFilterExpression(expression: expression, value: transaction.value) {
           NavigationLink(destination: EditTransactionView(transaction: transaction)) {
@@ -128,13 +180,13 @@ struct TransactionListView: View {
                 .fontWeight(.bold)
               Divider()
               Text("\(transaction.timestamp.formatted(date: .numeric, time: .shortened))")
-                HStack {
-                    Text("Category: ")
-                    if let img = transaction.category?.image {
-                        Image(systemName: img)
-                    }
-                    Text("\(transaction.category?.name ?? "None")")
+              HStack {
+                Text("Category: ")
+                if let img = transaction.category?.image {
+                  Image(systemName: img)
                 }
+                Text("\(transaction.category?.name ?? "None")")
+              }
             }
           }
         }
@@ -168,10 +220,12 @@ struct EditTransactionView: View {
   @State private var newAccount: String
   @State private var newName: String = ""
   @State private var newDate: Date = Date()
-  @State private var newCategory: Category? = nil
+  @State private var newCategory: String = ""
   @State private var showError: Bool = false
   @State private var errorText: String = ""
   @Query private var accounts: [Account]
+  @Query private var categories: [Category]
+  @State private var showDeletePanel: Bool = false
 
   let formatter: NumberFormatter = {
     let formatter = NumberFormatter()
@@ -186,7 +240,7 @@ struct EditTransactionView: View {
     _newAccount = State(wrappedValue: transaction.account.name)
     _newName = State(wrappedValue: transaction.name)
     _newDate = State(wrappedValue: transaction.timestamp)
-    _newCategory = State(wrappedValue: transaction.category)
+    _newCategory = State(wrappedValue: transaction.category?.name ?? "")
   }
 
   var body: some View {
@@ -200,19 +254,32 @@ struct EditTransactionView: View {
             Text(a.name).tag(a.name)
           }
         }
+        Picker("Category", selection: $newCategory) {
+          Text("No category").tag("")
+          ForEach(categories, id: \.self) {
+            a in
+            VStack {
+              Image(systemName: a.image)
+              Spacer()
+              Text(a.name)
+            }
+            .tag(a.name)
+            .padding()
+          }
+        }
         Divider()
         HStack {
           Text("Name: ")
             .fontWeight(.heavy)
-          TextField("", text: $newName).padding()
+          TextField("", text: $newName).padding().textFieldStyle(.roundedBorder)
         }
         Divider()
-        HStack {
+        VStack {
           HStack {
             Text("Value: ")
               .fontWeight(.heavy)
             TextField("", value: $newValue, formatter: formatter).keyboardType(.decimalPad)
-              .padding()
+              .padding().textFieldStyle(.roundedBorder)
           }
           Stepper(value: $newValue, in: 0.00...9_999_999, step: 0.01) {
 
@@ -220,9 +287,20 @@ struct EditTransactionView: View {
         }
         Divider()
         DatePicker("Date: ", selection: $newDate)
+        Divider()
         Button(action: { withAnimation { submitChanges() } }) {
           Text("Submit")
         }
+        Divider()
+        Spacer()
+        Button(action: { withAnimation { showDeletePanel.toggle() } }) {
+          Text("Delete")
+            .foregroundStyle(.red)
+        }.sheet(
+          isPresented: $showDeletePanel,
+          content: {
+            DeleteTransactionView(transaction: transaction)
+          })
       }
     }
     .padding()
@@ -249,6 +327,9 @@ struct EditTransactionView: View {
         FetchDescriptor<Account>(predicate: #Predicate { $0.name == newAccount }))
       let transaction = try modelContext.fetch(
         FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == uuid }))
+      let category = try modelContext.fetch(
+        FetchDescriptor<Category>(predicate: #Predicate { $0.name == newCategory })
+      ).first
       if let acc = nAccount.first {
         if let transactionUnwrapped = transaction.first {
           transactionUnwrapped.account.balance -= transactionUnwrapped.value
@@ -256,7 +337,7 @@ struct EditTransactionView: View {
           transactionUnwrapped.value = newValue
           transactionUnwrapped.name = newName
           transactionUnwrapped.account = acc
-          transactionUnwrapped.category = newCategory
+          transactionUnwrapped.category = category
           transactionUnwrapped.timestamp = newDate
           dismiss()
         } else {
@@ -307,34 +388,38 @@ struct AddTransactionView: View {
           }
           Divider()
           Picker("Category", selection: $transactionCategory) {
-              ForEach(categories, id: \.self) {
+            Text("No category").tag("")
+            ForEach(categories, id: \.self) {
               a in
-                VStack{
-                    Image(systemName: a.image)
-                    Spacer()
-                    Text(a.name)
-                }
-                .tag(a.name)
-                .padding()
+              VStack {
+                Image(systemName: a.image)
+                Spacer()
+                Text(a.name)
+              }
+              .tag(a.name)
+              .padding()
             }
           }
           Divider()
           HStack {
             Text("Name: ")
               .fontWeight(.heavy)
-            TextField("", text: $name).padding()
+            TextField("", text: $name)
+              .padding()
+              .textFieldStyle(.roundedBorder)
           }
           Divider()
-          HStack {
+          VStack {
             HStack {
               Text("Value: ")
                 .fontWeight(.heavy)
               TextField("", value: $value, formatter: formatter).keyboardType(
                 .numbersAndPunctuation
-              ).padding()
+              )
+              .padding()
+              .textFieldStyle(.roundedBorder)
             }
             Stepper(value: $value, in: 0.00...9_999_999, step: 0.01) {
-
             }
           }
           Divider()
@@ -375,7 +460,7 @@ struct AddTransactionView: View {
   }
 
   func getCategory() {
-      transactionCategory = categories.first?.name ?? ""
+    transactionCategory = categories.first?.name ?? ""
   }
 
   func submitTransaction() {
@@ -383,7 +468,7 @@ struct AddTransactionView: View {
       let account = try modelContext.fetch(
         FetchDescriptor<Account>(predicate: #Predicate { $0.name == selectedAccount })
       )
-        let category = categories.first(where: {category in category.name == transactionCategory})
+      let category = categories.first(where: { category in category.name == transactionCategory })
       if let accountUn = account.first {
         let transaction = Transaction(
           timestamp: date, value: value, account: accountUn, name: name,
@@ -400,6 +485,40 @@ struct AddTransactionView: View {
     }
   }
 }
+
+struct DeleteTransactionView: View {
+  @Bindable var transaction: Transaction
+  @Environment(\.modelContext) private var modelContext
+  @Environment(\.dismiss) var dismiss
+
+  var body: some View {
+    Text("Delete transaction? It's irreversible")
+      .foregroundStyle(.red)
+      .fontWeight(.heavy)
+    Button(action: { withAnimation { deleteTransaction() } }) {
+      Text("Delete")
+        .foregroundStyle(.red)
+    }
+  }
+
+  func deleteTransaction() {
+    do {
+      let id = transaction.account.id
+      var account = try modelContext.fetch(
+        FetchDescriptor<Account>(predicate: #Predicate { $0.id == id })
+      ).first
+      if var acc = account {
+        account?.balance -= transaction.value
+      }
+      modelContext.delete(transaction)
+      try modelContext.save()
+      dismiss()
+    } catch {
+
+    }
+  }
+}
+
 #Preview {
   TransactionListView().modelContainer(PreviewModelContainer)
 }
