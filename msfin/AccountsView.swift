@@ -69,6 +69,13 @@ struct AccountsView: View {
             Image(systemName: "squareshape.split.3x3")
           }
         }
+        ToolbarItem(placement: .topBarLeading) {
+          NavigationLink(
+            destination: CurrencyExchangeView()
+          ) {
+            Image(systemName: "dollarsign.arrow.circlepath")
+          }
+        }
       }
     }.foregroundStyle(colorScheme == .light ? Color.black : Color.white)
   }

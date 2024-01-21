@@ -17,24 +17,22 @@ struct CategoryView: View {
   @State private var allowAdd: Bool = false
 
   var body: some View {
-    NavigationView {
-      ScrollView(.vertical, showsIndicators: false) {
-        ForEach(categories) { category in
-          NavigationLink(destination: AddCategoryView()) {
-            VStack {
-              HStack {
-                Image(systemName: category.image)
-                Text(category.name)
-              }
-              Divider()
+    ScrollView(.vertical, showsIndicators: false) {
+      ForEach(categories) { category in
+        NavigationLink(destination: AddCategoryView()) {
+          VStack {
+            HStack {
+              Image(systemName: category.image)
+              Text(category.name)
             }
-            .padding()
-            .frame(maxWidth: 300)
+            Divider()
           }
-          .backgroundStyle(.clear)
-          .buttonStyle(.bordered)
-          .buttonBorderShape(.roundedRectangle(radius: 5))
+          .padding()
+          .frame(maxWidth: 300)
         }
+        .backgroundStyle(.clear)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.roundedRectangle(radius: 5))
       }
     }.toolbar {
       ToolbarItem {
